@@ -2,25 +2,23 @@ package zfs
 
 import (
 	"errors"
-	"strconv"
+	"fmt"
 	"strings"
-
-	"github.com/theairkit/runcmd"
 )
 
 type zfsEntry struct {
-	runner runcmd.Runner
+	runner Zfs
 	Path   string
 }
 
 func (z zfsEntry) GetProperty(prop string) (string, error) {
-	c, err := z.runner.Command("zfs get -H -o value " + prop + " " + z.Path)
+	c, err := z.runner.Command("zfs get -Hp -o value " + prop + " " + z.Path)
 	if err != nil {
-		return "", errors.New("error getting property: " + err.Error())
+		return "", err
 	}
 	out, err := c.Run()
 	if err != nil {
-		return "", errors.New("error getting property: " + err.Error())
+		return "", parseError(err)
 	}
 	return out[0], nil
 
@@ -32,14 +30,14 @@ func (z zfsEntry) SetProperty(prop, value string) error {
 		return err
 	}
 	if _, err = c.Run(); err != nil {
-		return err
+		return parseError(err)
 	}
 	out, err := z.GetProperty(prop)
 	if err != nil {
 		return err
 	}
 	if out != value {
-		return errors.New("cannot set property: " + prop)
+		return errors.New("property " + prop + " not set")
 	}
 	return nil
 }
@@ -54,7 +52,25 @@ func (z zfsEntry) Destroy(recursive bool) error {
 		return err
 	}
 	_, err = c.Run()
-	return err
+	return parseError(err)
+}
+
+func (z zfsEntry) Exists() (bool, error) {
+	c, err := z.runner.Command("zfs list -H -o name " + z.Path)
+	if err != nil {
+		return false, errors.New("error initializing existance check: " + err.Error())
+	}
+
+	_, err = c.Run()
+	if err == nil {
+		return true, nil
+	}
+	err = parseError(err)
+	if NotExist.MatchString(err.Error()) {
+		return false, nil
+	}
+
+	return false, parseError(err)
 }
 
 func (z zfsEntry) GetPool() string {
@@ -78,16 +94,20 @@ func CreateFs(zfsPath string) (Fs, error) {
 
 // Actually creates filesystem
 func (z Zfs) CreateFs(zfsPath string) (Fs, error) {
-	c, err := z.runner.Command("zfs create " + zfsPath)
+	fs := NewFs(zfsPath)
+	ok, err := fs.Exists()
 	if err != nil {
-		return z.NewFs(zfsPath), errors.New("error creating fs: " + err.Error())
+		return Fs{}, err
+	}
+	if ok {
+		return Fs{}, errors.New(fmt.Sprintf("fs %s already exists", zfsPath))
+	}
+	c, err := z.Command("zfs create " + zfsPath)
+	if err != nil {
+		return z.NewFs(zfsPath), err
 	}
 	_, err = c.Run()
-	if err != nil {
-		return z.NewFs(zfsPath), errors.New("error creating fs: " + err.Error())
-	}
-
-	return z.NewFs(zfsPath), nil
+	return z.NewFs(zfsPath), parseError(err)
 }
 
 // See Zfs.NewFs
@@ -97,7 +117,7 @@ func NewFs(zfsPath string) Fs {
 
 // Return Fs wrapper without any checks and actualy creation
 func (z Zfs) NewFs(zfsPath string) Fs {
-	return Fs{zfsEntry{z.runner, zfsPath}}
+	return Fs{zfsEntry{z, zfsPath}}
 }
 
 // See Zfs.ListFs
@@ -107,14 +127,19 @@ func ListFs(path string) ([]Fs, error) {
 
 // Return list of all found filesystems
 func (z Zfs) ListFs(path string) ([]Fs, error) {
-	c, err := z.runner.Command("zfs list -Hr -o name " + path)
+	c, err := z.Command("zfs list -Hr -o name " + path)
 	if err != nil {
 		return []Fs{}, errors.New("error listing fs: " + err.Error())
 	}
 
 	out, err := c.Run()
 	if err != nil {
-		return []Fs{}, errors.New("error listing fs: " + err.Error())
+		err := parseError(err)
+		if NotExist.MatchString(err.Error()) {
+			return []Fs{}, nil
+		}
+
+		return []Fs{}, err
 	}
 
 	filesystems := []Fs{}
@@ -125,47 +150,6 @@ func (z Zfs) ListFs(path string) ([]Fs, error) {
 	return filesystems, nil
 }
 
-func (f Fs) ListSnapshots() ([]Snapshot, error) {
-	c, err := f.runner.Command("zfs list -Hr -o name -t snapshot " + f.Path)
-	if err != nil {
-		return []Snapshot{},
-			errors.New("error getting snapshot list: " + err.Error())
-	}
-	out, err := c.Run()
-	if err != nil {
-		return []Snapshot{},
-			errors.New("error getting snapshot list: " + err.Error())
-	}
-
-	snapshots := []Snapshot{}
-	for _, snap := range out {
-		snapName := strings.Split(snap, "@")[1]
-		snapshots = append(snapshots, Snapshot{
-			zfsEntry{f.runner, snap},
-			f,
-			snapName,
-		})
-	}
-	return snapshots, nil
-}
-
-func (f Fs) Snapshot(name string) (Snapshot, error) {
-	snapshotPath := f.Path + "@" + name
-	c, err := f.runner.Command("zfs snapshot " + snapshotPath)
-	if err != nil {
-		return Snapshot{},
-			errors.New("error creating snapshot: " + err.Error())
-	}
-	_, err = c.Run()
-	if err != nil {
-		return Snapshot{},
-			errors.New("error creating snapshot: " + err.Error())
-	}
-
-	snap := Snapshot{zfsEntry{f.runner, snapshotPath}, f, name}
-	return snap, nil
-}
-
 func (f Fs) Promote() error {
 	c, err := f.runner.Command("zfs promote " + f.Path)
 	if err != nil {
@@ -173,21 +157,8 @@ func (f Fs) Promote() error {
 	}
 	_, err = c.Run()
 	if err != nil {
-		return errors.New("error promoting fs: " + err.Error())
+		return parseError(err)
 	}
 
 	return nil
-}
-
-func (f Fs) GetSize() (int, error) {
-	c, err := f.runner.Command("zfs get -Hp -o value usedbydataset " + f.Path)
-	if err != nil {
-		return 0, errors.New("error getting fs size: " + err.Error())
-	}
-	out, err := c.Run()
-	if err != nil {
-		return 0, errors.New("error getting fs size: " + err.Error())
-	}
-
-	return strconv.Atoi(out[0])
 }

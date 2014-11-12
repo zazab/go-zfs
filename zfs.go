@@ -3,7 +3,7 @@ package zfs
 import "github.com/theairkit/runcmd"
 
 type Zfs struct {
-	runner ZfsRunner
+	ZfsRunner
 }
 
 type ZfsRunner struct {
