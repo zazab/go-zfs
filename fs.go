@@ -4,14 +4,27 @@ import (
 	"errors"
 	"fmt"
 	"strings"
+
+	"github.com/theairkit/runcmd"
 )
 
-type zfsEntry struct {
+type zfsEntry interface {
+	GetProperty(string) (string, error)
+	SetProperty(string, string) error
+	GetPool() string
+	GetLastPath() string
+	Destroy(bool) error
+	Exists() (bool, error)
+	Receive() (runcmd.CmdWorker, error)
+	getPath() string
+}
+
+type zfsEntryBase struct {
 	runner Zfs
 	Path   string
 }
 
-func (z zfsEntry) GetProperty(prop string) (string, error) {
+func (z zfsEntryBase) GetProperty(prop string) (string, error) {
 	c, err := z.runner.Command("zfs get -Hp -o value " + prop + " " + z.Path)
 	if err != nil {
 		return "", err
@@ -24,7 +37,11 @@ func (z zfsEntry) GetProperty(prop string) (string, error) {
 
 }
 
-func (z zfsEntry) SetProperty(prop, value string) error {
+func (z zfsEntryBase) getPath() string {
+	return z.Path
+}
+
+func (z zfsEntryBase) SetProperty(prop, value string) error {
 	c, err := z.runner.Command("zfs set " + prop + "=" + value + " " + z.Path)
 	if err != nil {
 		return err
@@ -42,7 +59,7 @@ func (z zfsEntry) SetProperty(prop, value string) error {
 	return nil
 }
 
-func (z zfsEntry) Destroy(recursive bool) error {
+func (z zfsEntryBase) Destroy(recursive bool) error {
 	cmd := "zfs destroy "
 	if recursive {
 		cmd += "-R "
@@ -55,7 +72,7 @@ func (z zfsEntry) Destroy(recursive bool) error {
 	return parseError(err)
 }
 
-func (z zfsEntry) Exists() (bool, error) {
+func (z zfsEntryBase) Exists() (bool, error) {
 	c, err := z.runner.Command("zfs list -H -o name " + z.Path)
 	if err != nil {
 		return false, errors.New("error initializing existance check: " + err.Error())
@@ -73,18 +90,27 @@ func (z zfsEntry) Exists() (bool, error) {
 	return false, parseError(err)
 }
 
-func (z zfsEntry) GetPool() string {
+func (z zfsEntryBase) Receive() (runcmd.CmdWorker, error) {
+	c, err := z.runner.Command("zfs receive " + z.Path)
+	if err != nil {
+		return nil, err
+	}
+
+	return c, c.Start()
+}
+
+func (z zfsEntryBase) GetPool() string {
 	buf := strings.SplitN(z.Path, "/", 2)
 	return buf[0]
 }
 
-func (z zfsEntry) GetLastPath() string {
+func (z zfsEntryBase) GetLastPath() string {
 	buf := strings.Split(z.Path, "/")
 	return buf[len(buf)-1]
 }
 
 type Fs struct {
-	zfsEntry
+	zfsEntryBase
 }
 
 // See Zfs.CreateFs
@@ -117,7 +143,7 @@ func NewFs(zfsPath string) Fs {
 
 // Return Fs wrapper without any checks and actualy creation
 func (z Zfs) NewFs(zfsPath string) Fs {
-	return Fs{zfsEntry{z, zfsPath}}
+	return Fs{zfsEntryBase{z, zfsPath}}
 }
 
 // See Zfs.ListFs
@@ -139,7 +165,7 @@ func (z Zfs) ListFs(path string) ([]Fs, error) {
 			return []Fs{}, nil
 		}
 
-		return []Fs{}, err
+		return []Fs{}, parseError(err)
 	}
 
 	filesystems := []Fs{}

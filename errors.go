@@ -7,15 +7,16 @@ import (
 )
 
 var (
-	BadPropGet      = regexp.MustCompile(`bad property list: invalid property '.+'`)
-	BadPropSet      = regexp.MustCompile(`cannot set property for '.+': invalid property '.+'`)
-	NeedRec         = regexp.MustCompile(`cannot destroy '.+': filesystem has children`)
-	NotExist        = regexp.MustCompile(`cannot open '.+': dataset does not exist`)
-	NotMounted      = regexp.MustCompile(`filesystem successfully created, but not mounted`)
+	BadPropGet      = regexp.MustCompile(`bad property list: invalid property '.+'$`)
+	BadPropSet      = regexp.MustCompile(`cannot set property for '.+': invalid property '.+'$`)
+	NeedRec         = regexp.MustCompile(`cannot destroy '.+': filesystem has children$`)
+	NotExist        = regexp.MustCompile(`cannot open '.+': dataset does not exist$`)
+	NotMounted      = regexp.MustCompile(`^filesystem successfully created, but not mounted`)
 	NeedSudo        = regexp.MustCompile(`need sudo`)
-	AllreadyExists  = regexp.MustCompile(`fs .+ already exists`)
-	PromoteNotClone = regexp.MustCompile(`cannot promote '.+': not a cloned filesystem`)
-	InvalidDataset  = regexp.MustCompile(`cannot open '.+': invalid dataset name`)
+	AllreadyExists  = regexp.MustCompile(`fs .+ already exists$`)
+	PromoteNotClone = regexp.MustCompile(`cannot promote '.+': not a cloned filesystem$`)
+	InvalidDataset  = regexp.MustCompile(`invalid( dataset)? name$`)
+	ReceiverExists  = regexp.MustCompile(`cannot receive new filesystem stream: destination '.+' exists$`)
 
 	PoolError = errors.New("error creating clone: source and target in different pools")
 )
@@ -51,8 +52,10 @@ func parseError(err error) error {
 	case NotExist.MatchString(errs[0]):
 		return errors.New(errs[0])
 	case NotMounted.MatchString(errs[len(errs)-1]):
-		return errors.New(errs[len(errs)-1] + "need sudo to mount")
+		return errors.New(errs[len(errs)-1] + " need sudo to mount")
 	case InvalidDataset.MatchString(errs[0]):
+		return errors.New(errs[0])
+	case ReceiverExists.MatchString(errs[0]):
 		return errors.New(errs[0])
 	default:
 		return errors.New(joinErrs(errs))

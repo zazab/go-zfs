@@ -1,15 +1,20 @@
 package zfs
 
-import "github.com/theairkit/runcmd"
+import (
+	"fmt"
+
+	"github.com/theairkit/runcmd"
+)
 import "testing"
 
 const (
 	testPath   string = "tank/test"
+	sendPath   string = testPath
 	otherPool  string = "zssd/test"
 	sudoPath   string = "tank/sudo"
 	unicorn    string = testPath + "/unicorn"
 	badDataset string = testPath + "/bad/"
-	user       string = "DUMMY"
+	user       string = "persienko"
 	pass       string = "PASSWORD"
 )
 
@@ -157,7 +162,7 @@ func TestSnapshot(t *testing.T) {
 		t.Error("Snapshot: created snapshot on not existent fs")
 	}
 	if !NotExist.MatchString(err.Error()) {
-		t.Error("Snapshot: wrong error creating snap on unicorn")
+		t.Error("Snapshot: wrong error creating snap on unicorn:", err)
 	}
 }
 
@@ -211,7 +216,7 @@ func TestDestroyRecursive(t *testing.T) {
 	}
 
 	if !InvalidDataset.MatchString(err.Error()) {
-		t.Error("Snapshot: wrong error while creating snapshot for bad fs")
+		t.Error("Snapshot: wrong error while creating snapshot for bad fs:", err)
 	}
 }
 
@@ -283,7 +288,7 @@ func TestListSnapshots(t *testing.T) {
 	}
 
 	if !InvalidDataset.MatchString(err.Error()) {
-		t.Error("ListSnapshots: wrong error while listing snapshots for bad fs")
+		t.Error("ListSnapshots: wrong error while listing snapshots for bad fs:", err)
 	}
 }
 
@@ -395,8 +400,83 @@ func TestPromote(t *testing.T) {
 	}
 }
 
+func TestSendReceive(t *testing.T) {
+	srcFs, _ := CreateFs(testPath + "/src")
+	srcSnap, _ := srcFs.Snapshot("s1")
+	srcSize, _ := srcFs.GetProperty("usedbydataset")
+
+	destFs := NewFs(sendPath + "/dest")
+
+	err := srcSnap.Send(destFs)
+	if err != nil {
+		t.Error("SndRcv: error sending snapshot:", err)
+	}
+
+	if ok, _ := destFs.Exists(); !ok {
+		t.Error("SndRcv: destination fs doesn't exists")
+	}
+
+	destSize, _ := destFs.GetProperty("usedbydataset")
+
+	if srcSize != destSize {
+		t.Errorf("SndRcv: dest fs have different size %s, wanted %s",
+			destSize, srcSize)
+	}
+
+	destSnap := NewSnapshot(destFs.Path + "@s1")
+	if ok, _ := destSnap.Exists(); !ok {
+		t.Error("SndRcv: destination snapshot fs doesn't exists")
+	}
+
+	secondSnap, _ := srcFs.Snapshot("s2")
+	err = secondSnap.SendInc(srcSnap, destFs)
+	if err != nil {
+		t.Error("SndRcv: error sending incremental snapshot:", err)
+	}
+
+	destSnap = NewSnapshot(destFs.Path + "@s2")
+	if ok, _ := destSnap.Exists(); !ok {
+		t.Error("SndRcv: destination snapshot fs doesn't exists after incremental")
+	}
+
+	srcFs.Destroy(true)
+	destFs.Destroy(true)
+
+	fmt.Println("Sending not existing fs")
+	srcSnap = NewSnapshot(unicorn + "@s1")
+	err = srcSnap.Send(destFs)
+	if err == nil {
+		t.Error("SndRcv: sended not existent snapshot without errors")
+	}
+	if !NotExist.MatchString(err.Error()) {
+		t.Error("SndRcv: wrong error sending not existent snapshot:", err)
+	}
+
+	srcFs, _ = CreateFs(testPath + "/src")
+	srcSnap, _ = srcFs.Snapshot("s1")
+
+	destFs = NewFs(badDataset)
+	fmt.Println("Sending to bad fs")
+	err = srcSnap.Send(destFs)
+	if err == nil {
+		t.Error("SndRcv: sended to bad fs")
+	}
+	if !InvalidDataset.MatchString(err.Error()) {
+		t.Error("SndRcv: wrong error sending to bad dataset:", err)
+	}
+
+	err = srcSnap.Send(srcFs)
+	if err == nil {
+		t.Error("SndRcv: sended to existent fs")
+	}
+	if !ReceiverExists.MatchString(err.Error()) {
+		t.Error("SndRcv: wrong error sending to existent fs:", err)
+	}
+	srcFs.Destroy(true)
+}
+
 func TestRemote(t *testing.T) {
-	r, err := runcmd.NewRemotePassAuthRunner(user, "localhost", pass)
+	r, err := runcmd.NewRemotePassAuthRunner(user, "localhost:22", pass)
 	if err != nil {
 		t.Fatal("Remote: error initializing connection:", err)
 	}
