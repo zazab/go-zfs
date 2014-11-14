@@ -158,3 +158,24 @@ func (s Snapshot) SendIncStream(base Snapshot, dest runcmd.CmdWorker) error {
 
 	return parseError(c.Wait())
 }
+
+func (s Snapshot) ListClones() ([]Fs, error) {
+	fss, err := ListFs(s.GetPool())
+	if err != nil {
+		return []Fs{}, err
+	}
+
+	clones := []Fs{}
+	for _, fs := range fss {
+		origin, err := fs.GetProperty("origin")
+		if err != nil {
+			return []Fs{}, err
+		}
+
+		if origin == s.Path {
+			clones = append(clones, fs)
+		}
+	}
+
+	return clones, nil
+}

@@ -2,10 +2,10 @@ package zfs
 
 import (
 	"fmt"
+	"testing"
 
 	"github.com/theairkit/runcmd"
 )
-import "testing"
 
 const (
 	testPath   string = "tank/test"
@@ -14,7 +14,7 @@ const (
 	sudoPath   string = "tank/sudo"
 	unicorn    string = testPath + "/unicorn"
 	badDataset string = testPath + "/bad/"
-	user       string = "persienko"
+	user       string = "DUMMY"
 	pass       string = "PASSWORD"
 )
 
@@ -360,6 +360,47 @@ func TestClone(t *testing.T) {
 	if err != PoolError {
 		t.Errorf("Clone: wrong error: %s, want %s", err, PoolError)
 	}
+}
+
+func TestListClones(t *testing.T) {
+	fs, _ := CreateFs(testPath + "/fs1")
+	sn, _ := fs.Snapshot("s1")
+
+	lclones, err := sn.ListClones()
+	if err != nil {
+		t.Error("ListClones:", err)
+	}
+	if len(lclones) > 0 {
+		t.Error("ListClones: found something wrong")
+	}
+
+	clnNames := []string{"cln1", "cln2", "cln3"}
+	clones := []Fs{}
+
+	for _, cln := range clnNames {
+		c, _ := sn.Clone(testPath + "/" + cln)
+		clones = append(clones, c)
+	}
+
+	lclones, err = sn.ListClones()
+	if err != nil {
+		t.Error(err)
+	}
+
+	if len(lclones) != len(clones) {
+		fs.Destroy(true)
+		t.Fatalf("ListClones: wrong number of clones recived: %d want %d",
+			len(lclones), len(clones))
+	}
+
+	for i, cln := range lclones {
+		if cln.Path != clones[i].Path {
+			t.Error("ListClones: clone not match: %s want %s",
+				cln.Path, clones[i].Path)
+		}
+	}
+
+	fs.Destroy(true)
 }
 
 func TestPromote(t *testing.T) {
