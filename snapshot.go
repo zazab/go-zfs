@@ -4,8 +4,6 @@ import (
 	"errors"
 	"io"
 	"strings"
-
-	"github.com/theairkit/runcmd"
 )
 
 // See Zfs.NewSnapshot
@@ -92,7 +90,12 @@ func (s Snapshot) Send(to ZfsEntry) error {
 		return err
 	}
 
-	return s.SendStream(rc)
+	err = s.SendStream(rc.StdinPipe())
+	if err != nil {
+		return err
+	}
+
+	return parseError(rc.Wait())
 }
 
 func (s Snapshot) SendInc(base Snapshot, to ZfsEntry) error {
@@ -101,10 +104,15 @@ func (s Snapshot) SendInc(base Snapshot, to ZfsEntry) error {
 		return err
 	}
 
-	return s.SendIncStream(base, rc)
+	err = s.SendIncStream(base, rc.StdinPipe())
+	if err != nil {
+		return err
+	}
+
+	return parseError(rc.Wait())
 }
 
-func (s Snapshot) SendStream(dest runcmd.CmdWorker) error {
+func (s Snapshot) SendStream(dest io.Writer) error {
 	if ok, _ := s.Exists(); !ok {
 		return notExits(s)
 	}
@@ -117,20 +125,15 @@ func (s Snapshot) SendStream(dest runcmd.CmdWorker) error {
 		return err
 	}
 
-	_, err = io.Copy(dest.StdinPipe(), c.StdoutPipe())
+	_, err = io.Copy(dest, c.StdoutPipe())
 	if err != nil {
 		return err
-	}
-
-	err = dest.Wait()
-	if err != nil {
-		return parseError(err)
 	}
 
 	return parseError(c.Wait())
 }
 
-func (s Snapshot) SendIncStream(base Snapshot, dest runcmd.CmdWorker) error {
+func (s Snapshot) SendIncStream(base Snapshot, dest io.Writer) error {
 	if ok, _ := s.Exists(); !ok {
 		return notExits(s)
 	}
@@ -146,21 +149,12 @@ func (s Snapshot) SendIncStream(base Snapshot, dest runcmd.CmdWorker) error {
 		return errors.New("error starting send: " + err.Error())
 	}
 
-	_, err = io.Copy(dest.StdinPipe(), c.StdoutPipe())
+	_, err = io.Copy(dest, c.StdoutPipe())
 	if err != nil {
-		if BrokenPipe.MatchString(err.Error()) {
-			derr := parseError(dest.Wait())
-			return errors.New("brokenpipe. dest error: " + derr.Error())
-		}
 		return errors.New("error copying to dest: " + err.Error())
 	}
 
-	err = c.Wait()
-	if err != nil {
-		return parseError(err)
-	}
-
-	return parseError(dest.Wait())
+	return parseError(c.Wait())
 }
 
 func (s Snapshot) ListClones() ([]Fs, error) {

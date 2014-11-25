@@ -3,7 +3,6 @@ package zfs
 import (
 	"errors"
 	"fmt"
-	"io"
 	"strconv"
 	"strings"
 
