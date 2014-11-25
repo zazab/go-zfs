@@ -82,11 +82,11 @@ func (f Fs) ListSnapshots() ([]Snapshot, error) {
 	return snapshots, nil
 }
 
-func notExits(e zfsEntry) error {
+func notExits(e ZfsEntry) error {
 	return errors.New("cannot open '" + e.getPath() + "': dataset does not exist")
 }
 
-func (s Snapshot) Send(to zfsEntry) error {
+func (s Snapshot) Send(to ZfsEntry) error {
 	rc, err := to.Receive()
 	if err != nil {
 		return err
@@ -95,7 +95,7 @@ func (s Snapshot) Send(to zfsEntry) error {
 	return s.SendStream(rc)
 }
 
-func (s Snapshot) SendInc(base Snapshot, to zfsEntry) error {
+func (s Snapshot) SendInc(base Snapshot, to ZfsEntry) error {
 	rc, err := to.Receive()
 	if err != nil {
 		return err
@@ -140,23 +140,27 @@ func (s Snapshot) SendIncStream(base Snapshot, dest runcmd.CmdWorker) error {
 
 	c, err := s.runner.Command("zfs send -i " + base.Path + " " + s.Path)
 	if err != nil {
-		return err
+		return errors.New("error initializing send: " + err.Error())
 	}
 	if err := c.Start(); err != nil {
-		return err
+		return errors.New("error starting send: " + err.Error())
 	}
 
 	_, err = io.Copy(dest.StdinPipe(), c.StdoutPipe())
 	if err != nil {
-		return err
+		if BrokenPipe.MatchString(err.Error()) {
+			derr := parseError(dest.Wait())
+			return errors.New("brokenpipe. dest error: " + derr.Error())
+		}
+		return errors.New("error copying to dest: " + err.Error())
 	}
 
-	err = dest.Wait()
+	err = c.Wait()
 	if err != nil {
 		return parseError(err)
 	}
 
-	return parseError(c.Wait())
+	return parseError(dest.Wait())
 }
 
 func (s Snapshot) ListClones() ([]Fs, error) {

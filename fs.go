@@ -3,13 +3,16 @@ package zfs
 import (
 	"errors"
 	"fmt"
+	"io"
+	"strconv"
 	"strings"
 
 	"github.com/theairkit/runcmd"
 )
 
-type zfsEntry interface {
+type ZfsEntry interface {
 	GetProperty(string) (string, error)
+	GetPropertyInt(string) (int64, error)
 	SetProperty(string, string) error
 	GetPool() string
 	GetLastPath() string
@@ -34,7 +37,22 @@ func (z zfsEntryBase) GetProperty(prop string) (string, error) {
 		return "", parseError(err)
 	}
 	return out[0], nil
+}
 
+func (z zfsEntryBase) GetPropertyInt(prop string) (int64, error) {
+	c, err := z.runner.Command("zfs get -Hp -o value " + prop + " " + z.Path)
+	if err != nil {
+		return 0, err
+	}
+	out, err := c.Run()
+	if err != nil {
+		return 0, parseError(err)
+	}
+	val, err := strconv.ParseInt(out[0], 10, 64)
+	if err != nil {
+		return 0, errors.New("error converting to int: " + err.Error())
+	}
+	return val, nil
 }
 
 func (z zfsEntryBase) getPath() string {
@@ -182,9 +200,23 @@ func (f Fs) Promote() error {
 		return errors.New("error promoting fs: " + err.Error())
 	}
 	_, err = c.Run()
-	if err != nil {
-		return parseError(err)
-	}
+	return parseError(err)
+}
 
-	return nil
+func (f Fs) Mount() error {
+	c, err := f.runner.Command("zfs mount " + f.Path)
+	if err != nil {
+		return errors.New("error mounting fs: " + err.Error())
+	}
+	_, err = c.Run()
+	return parseError(err)
+}
+
+func (f Fs) Unmount() error {
+	c, err := f.runner.Command("zfs unmount " + f.Path)
+	if err != nil {
+		return errors.New("error unmounting fs: " + err.Error())
+	}
+	_, err = c.Run()
+	return parseError(err)
 }
