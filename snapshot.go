@@ -98,13 +98,41 @@ func (s Snapshot) Send(to ZfsEntry) error {
 	return parseError(rc.Wait())
 }
 
-func (s Snapshot) SendInc(base Snapshot, to ZfsEntry) error {
+func (s Snapshot) SendWithParams(to ZfsEntry) error {
 	rc, err := to.Receive()
 	if err != nil {
 		return err
 	}
 
-	err = s.SendIncStream(base, rc.StdinPipe())
+	err = s.SendStreamWithParams(rc.StdinPipe())
+	if err != nil {
+		return err
+	}
+
+	return parseError(rc.Wait())
+}
+
+func (s Snapshot) SendIncrementalWithParams(base Snapshot, to ZfsEntry) error {
+	rc, err := to.Receive()
+	if err != nil {
+		return err
+	}
+
+	err = s.SendIncrementalStreamWithParams(base, rc.StdinPipe())
+	if err != nil {
+		return err
+	}
+
+	return parseError(rc.Wait())
+}
+
+func (s Snapshot) SendIncremental(base Snapshot, to ZfsEntry) error {
+	rc, err := to.Receive()
+	if err != nil {
+		return err
+	}
+
+	err = s.SendIncrementalStream(base, rc.StdinPipe())
 	if err != nil {
 		return err
 	}
@@ -133,7 +161,28 @@ func (s Snapshot) SendStream(dest io.Writer) error {
 	return parseError(c.Wait())
 }
 
-func (s Snapshot) SendIncStream(base Snapshot, dest io.Writer) error {
+func (s Snapshot) SendStreamWithParams(dest io.Writer) error {
+	if ok, _ := s.Exists(); !ok {
+		return notExits(s)
+	}
+
+	c, err := s.runner.Command("zfs send -p " + s.Path)
+	if err != nil {
+		return err
+	}
+	if err := c.Start(); err != nil {
+		return err
+	}
+
+	_, err = io.Copy(dest, c.StdoutPipe())
+	if err != nil {
+		return err
+	}
+
+	return parseError(c.Wait())
+}
+
+func (s Snapshot) SendIncrementalStream(base Snapshot, dest io.Writer) error {
 	if ok, _ := s.Exists(); !ok {
 		return notExits(s)
 	}
@@ -142,6 +191,33 @@ func (s Snapshot) SendIncStream(base Snapshot, dest io.Writer) error {
 	}
 
 	c, err := s.runner.Command("zfs send -i " + base.Path + " " + s.Path)
+	if err != nil {
+		return errors.New("error initializing send: " + err.Error())
+	}
+	if err := c.Start(); err != nil {
+		return errors.New("error starting send: " + err.Error())
+	}
+
+	_, err = io.Copy(dest, c.StdoutPipe())
+	if err != nil {
+		return errors.New("error copying to dest: " + err.Error())
+	}
+
+	return parseError(c.Wait())
+}
+
+func (s Snapshot) SendIncrementalStreamWithParams(
+	base Snapshot,
+	dest io.Writer,
+) error {
+	if ok, _ := s.Exists(); !ok {
+		return notExits(s)
+	}
+	if ok, _ := base.Exists(); !ok {
+		return notExits(base)
+	}
+
+	c, err := s.runner.Command("zfs send -p -i " + base.Path + " " + s.Path)
 	if err != nil {
 		return errors.New("error initializing send: " + err.Error())
 	}
