@@ -95,16 +95,16 @@ func (z zfsEntryBase) Exists() (bool, error) {
 		return false, errors.New("error initializing existance check: " + err.Error())
 	}
 
-	_, err = c.Run()
-	if err == nil {
+	out, err := c.Run()
+	if err == nil && out[0] == z.Path {
 		return true, nil
 	}
 	err = parseError(err)
-	if NotExist.MatchString(err.Error()) {
+	if err != nil && NotExist.MatchString(err.Error()) {
 		return false, nil
 	}
 
-	return false, parseError(err)
+	return false, err
 }
 
 func (z zfsEntryBase) Receive() (runcmd.CmdWorker, error) {
