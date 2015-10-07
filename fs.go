@@ -3,6 +3,7 @@ package zfs
 import (
 	"errors"
 	"fmt"
+	"io"
 	"strconv"
 	"strings"
 
@@ -17,7 +18,7 @@ type ZfsEntry interface {
 	GetLastPath() string
 	Destroy(bool) error
 	Exists() (bool, error)
-	Receive() (runcmd.CmdWorker, error)
+	Receive() (runcmd.CmdWorker, io.WriteCloser, error)
 	getPath() string
 }
 
@@ -107,13 +108,18 @@ func (z zfsEntryBase) Exists() (bool, error) {
 	return false, err
 }
 
-func (z zfsEntryBase) Receive() (runcmd.CmdWorker, error) {
+func (z zfsEntryBase) Receive() (runcmd.CmdWorker, io.WriteCloser, error) {
 	c, err := z.runner.Command("zfs receive " + z.Path)
 	if err != nil {
-		return nil, err
+		return nil, nil, err
 	}
 
-	return c, c.Start()
+	stdinPipe, err := c.StdinPipe()
+	if err != nil {
+		return nil, nil, err
+	}
+
+	return c, stdinPipe, c.Start()
 }
 
 func (z zfsEntryBase) GetPool() string {

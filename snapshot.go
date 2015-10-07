@@ -92,15 +92,11 @@ func notExits(e ZfsEntry) error {
 }
 
 func (s Snapshot) Send(to ZfsEntry) error {
-	rc, err := to.Receive()
+	rc, stdinPipe, err := to.Receive()
 	if err != nil {
 		return err
 	}
 
-	stdinPipe, err := rc.StdinPipe()
-	if err != nil {
-		return err
-	}
 	err = s.SendStream(stdinPipe)
 	if err != nil {
 		return err
@@ -110,15 +106,11 @@ func (s Snapshot) Send(to ZfsEntry) error {
 }
 
 func (s Snapshot) SendWithParams(to ZfsEntry) error {
-	rc, err := to.Receive()
+	rc, stdinPipe, err := to.Receive()
 	if err != nil {
 		return err
 	}
 
-	stdinPipe, err := rc.StdinPipe()
-	if err != nil {
-		return err
-	}
 	err = s.SendStreamWithParams(stdinPipe)
 	if err != nil {
 		return err
@@ -128,15 +120,11 @@ func (s Snapshot) SendWithParams(to ZfsEntry) error {
 }
 
 func (s Snapshot) SendIncrementalWithParams(base Snapshot, to ZfsEntry) error {
-	rc, err := to.Receive()
+	rc, stdinPipe, err := to.Receive()
 	if err != nil {
 		return err
 	}
 
-	stdinPipe, err := rc.StdinPipe()
-	if err != nil {
-		return err
-	}
 	err = s.SendIncrementalStreamWithParams(base, stdinPipe)
 	if err != nil {
 		return err
@@ -146,15 +134,11 @@ func (s Snapshot) SendIncrementalWithParams(base Snapshot, to ZfsEntry) error {
 }
 
 func (s Snapshot) SendIncremental(base Snapshot, to ZfsEntry) error {
-	rc, err := to.Receive()
+	rc, stdinPipe, err := to.Receive()
 	if err != nil {
 		return err
 	}
 
-	stdinPipe, err := rc.StdinPipe()
-	if err != nil {
-		return err
-	}
 	err = s.SendIncrementalStream(base, stdinPipe)
 	if err != nil {
 		return err
@@ -172,14 +156,16 @@ func (s Snapshot) SendStream(dest io.Writer) error {
 	if err != nil {
 		return err
 	}
-	if err := c.Start(); err != nil {
-		return err
-	}
 
 	stdoutPipe, err := c.StdoutPipe()
 	if err != nil {
 		return err
 	}
+
+	if err := c.Start(); err != nil {
+		return err
+	}
+
 	_, err = io.Copy(dest, stdoutPipe)
 	if err != nil {
 		return err
@@ -197,14 +183,16 @@ func (s Snapshot) SendStreamWithParams(dest io.Writer) error {
 	if err != nil {
 		return err
 	}
-	if err := c.Start(); err != nil {
-		return err
-	}
 
 	stdoutPipe, err := c.StdoutPipe()
 	if err != nil {
 		return err
 	}
+
+	if err := c.Start(); err != nil {
+		return err
+	}
+
 	_, err = io.Copy(dest, stdoutPipe)
 	if err != nil {
 		return err
@@ -225,14 +213,16 @@ func (s Snapshot) SendIncrementalStream(base Snapshot, dest io.Writer) error {
 	if err != nil {
 		return errors.New("error initializing send: " + err.Error())
 	}
-	if err := c.Start(); err != nil {
-		return errors.New("error starting send: " + err.Error())
-	}
 
 	stdoutPipe, err := c.StdoutPipe()
 	if err != nil {
 		return err
 	}
+
+	if err := c.Start(); err != nil {
+		return errors.New("error starting send: " + err.Error())
+	}
+
 	_, err = io.Copy(dest, stdoutPipe)
 	if err != nil {
 		return errors.New("error copying to dest: " + err.Error())
@@ -256,14 +246,16 @@ func (s Snapshot) SendIncrementalStreamWithParams(
 	if err != nil {
 		return errors.New("error initializing send: " + err.Error())
 	}
-	if err := c.Start(); err != nil {
-		return errors.New("error starting send: " + err.Error())
-	}
 
 	stdoutPipe, err := c.StdoutPipe()
 	if err != nil {
 		return err
 	}
+
+	if err := c.Start(); err != nil {
+		return errors.New("error starting send: " + err.Error())
+	}
+
 	_, err = io.Copy(dest, stdoutPipe)
 	if err != nil {
 		return errors.New("error copying to dest: " + err.Error())
