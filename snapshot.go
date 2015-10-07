@@ -3,6 +3,7 @@ package zfs
 import (
 	"errors"
 	"io"
+	"log"
 	"strings"
 )
 
@@ -70,12 +71,18 @@ func (f Fs) ListSnapshots() ([]Snapshot, error) {
 
 	snapshots := []Snapshot{}
 	for _, snap := range out {
-		snapName := strings.Split(snap, "@")[1]
-		snapshots = append(snapshots, Snapshot{
-			zfsEntryBase{f.runner, snap},
-			f,
-			snapName,
-		})
+		if strings.Contains(snap, "@") {
+			snapName := strings.Split(snap, "@")[1]
+			snapshots = append(snapshots, Snapshot{
+				zfsEntryBase{f.runner, snap},
+				f,
+				snapName,
+			})
+		} else {
+			log.Println("some buggy snapshot:", snap)
+			continue
+		}
+
 	}
 	return snapshots, nil
 }
