@@ -3,7 +3,6 @@ package zfs
 import (
 	"errors"
 	"io"
-	"log"
 	"strings"
 )
 
@@ -79,7 +78,6 @@ func (f Fs) ListSnapshots() ([]Snapshot, error) {
 				snapName,
 			})
 		} else {
-			log.Println("some buggy snapshot:", snap)
 			continue
 		}
 
