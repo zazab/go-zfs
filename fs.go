@@ -193,6 +193,9 @@ func (z Zfs) ListFs(path string) ([]Fs, error) {
 
 	filesystems := []Fs{}
 	for _, fs := range out {
+		if fs == "" {
+			continue
+		}
 		filesystems = append(filesystems, z.NewFs(fs))
 	}
 
