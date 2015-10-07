@@ -34,12 +34,12 @@ func parseError(err error) error {
 
 	errs := strings.Split(err.Error(), "\n")
 
-	if errs[0] == "exit status 1" {
-		errs = errs[1:]
-	}
-
-	if errs[0] == "exit status 2" {
-		errs = errs[1:]
+	if strings.HasPrefix(errs[0], "exit status") {
+		if len(errs) > 1 {
+			errs = errs[1:]
+		} else {
+			errs = []string{errs[0]}
+		}
 	}
 
 	if errs[len(errs)-1] == "" {
