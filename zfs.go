@@ -11,14 +11,14 @@ type ZfsRunner struct {
 	sudo bool
 }
 
+var std = mustCreateRunner(NewZfsLocal(false))
+
 func (z ZfsRunner) Command(cmd string) (runcmd.CmdWorker, error) {
 	if z.sudo {
 		cmd = "sudo " + cmd
 	}
 	return z.Runner.Command(cmd)
 }
-
-var std, _ = NewZfsLocal(false)
 
 func NewZfsLocal(sudo bool) (Zfs, error) {
 	runner, err := runcmd.NewLocalRunner()
@@ -33,4 +33,12 @@ func SetStdSudo(sudo bool) error {
 	var err error
 	std, err = NewZfsLocal(sudo)
 	return err
+}
+
+func mustCreateRunner(operator Zfs, err error) Zfs {
+	if err != nil {
+		panic(err)
+	}
+
+	return operator
 }

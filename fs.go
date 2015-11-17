@@ -10,13 +10,21 @@ import (
 	"github.com/theairkit/runcmd"
 )
 
+type RecursiveFlag int
+
+const (
+	RF_No RecursiveFlag = iota
+	RF_Soft
+	RF_Hard
+)
+
 type ZfsEntry interface {
 	GetProperty(string) (string, error)
 	GetPropertyInt(string) (int64, error)
 	SetProperty(string, string) error
 	GetPool() string
 	GetLastPath() string
-	Destroy(bool) error
+	Destroy(RecursiveFlag) error
 	Exists() (bool, error)
 	Receive() (runcmd.CmdWorker, io.WriteCloser, error)
 	getPath() string
@@ -77,9 +85,12 @@ func (z zfsEntryBase) SetProperty(prop, value string) error {
 	return nil
 }
 
-func (z zfsEntryBase) Destroy(recursive bool) error {
+func (z zfsEntryBase) Destroy(recursive RecursiveFlag) error {
 	cmd := "zfs destroy "
-	if recursive {
+	switch recursive {
+	case RF_Soft:
+		cmd += "-r "
+	case RF_Hard:
 		cmd += "-R "
 	}
 	c, err := z.runner.Command(cmd + z.Path)
