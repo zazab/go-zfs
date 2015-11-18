@@ -157,10 +157,10 @@ func (z Zfs) CreateFs(zfsPath string) (Fs, error) {
 	fs := NewFs(zfsPath)
 	ok, err := fs.Exists()
 	if err != nil {
-		return Fs{}, err
+		return z.NewFs(zfsPath), err
 	}
 	if ok {
-		return Fs{}, errors.New(fmt.Sprintf("fs %s already exists", zfsPath))
+		return z.NewFs(zfsPath), errors.New(fmt.Sprintf("fs %s already exists", zfsPath))
 	}
 	c, err := z.Command("zfs create " + zfsPath)
 	if err != nil {

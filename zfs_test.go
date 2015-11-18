@@ -457,18 +457,15 @@ func TestListSnapshots(t *testing.T) {
 func TestSudo(t *testing.T) {
 	fs, err := CreateFs(sudoPath + "/fs1")
 	if err == nil {
-		fs.Destroy(RF_Hard)
 		t.Fatal("[Sudo] created without sudo")
 	}
+	fs.Destroy(RF_Hard)
 
 	if !NotMounted.MatchString(err.Error()) {
 		t.Error("[Sudo] wrong error:", err)
 	}
 
-	err = SetStdSudo(true)
-	if err != nil {
-		t.Error("[Sudo] error switching sudo on:", err)
-	}
+	SetStdSudo(true)
 
 	fs, err = CreateFs(sudoPath + "/fs1")
 	if err != nil {
@@ -481,14 +478,12 @@ func TestSudo(t *testing.T) {
 	}
 
 	fs2, err := CreateFs(sudoPath + "/fs2")
+	defer fs2.Destroy(RF_Hard)
 	if err != nil {
 		t.Fatal("[Sudo] error creating fs with sudo:", err)
 	}
 
-	err = SetStdSudo(false)
-	if err != nil {
-		t.Error("[Sudo] error switching sudo off:", err)
-	}
+	SetStdSudo(false)
 
 	err = fs2.Destroy(RF_No)
 	if err == nil {
@@ -496,7 +491,7 @@ func TestSudo(t *testing.T) {
 	}
 
 	SetStdSudo(true)
-	fs2.Destroy(RF_No)
+	NewFs(sudoPath + "/fs2").Destroy(RF_No)
 }
 
 func TestListClones(t *testing.T) {
@@ -603,13 +598,25 @@ func TestPromote(t *testing.T) {
 }
 
 func TestSendReceive(t *testing.T) {
-	srcFs, _ := CreateFs(testPath + "/src")
-	srcSnap, _ := srcFs.Snapshot("s1")
-	srcSize, _ := srcFs.GetProperty("usedbydataset")
+	srcFs, err := CreateFs(testPath + "/src")
+	if err != nil {
+		t.Fatal("[SndRcv] error creating fs:", err)
+	}
+	defer srcFs.Destroy(RF_Hard)
+
+	srcSnap, err := srcFs.Snapshot("s1")
+	if err != nil {
+		t.Fatal("[SndRcv] error creating fs:", err)
+	}
+
+	srcSize, err := srcFs.GetProperty("usedbydataset")
+	if err != nil {
+		t.Fatal("[SndRcv] error creating fs:", err)
+	}
 
 	destFs := NewFs(sendPath + "/dest")
 
-	err := srcSnap.Send(destFs)
+	err = srcSnap.Send(destFs)
 	if err != nil {
 		t.Error("[SndRcv] error sending snapshot:", err)
 	}
@@ -654,24 +661,38 @@ func TestSendReceive(t *testing.T) {
 		t.Error("[SndRcv] wrong error sending not existent snapshot:", err)
 	}
 
-	srcFs, _ = CreateFs(testPath + "/src")
-	srcSnap, _ = srcFs.Snapshot("s1")
+	srcFs, err = CreateFs(testPath + "/src")
+	if err != nil {
+		t.Fatal("[SndRcv] error creating src fs:", err)
+	}
+	t.Log("created source Fs")
+	srcSnap, err = srcFs.Snapshot("s1")
+	if err != nil {
+		t.Fatal("[SndRcv] error creating src fs snapshot:", err)
+	}
+	t.Log("created source Fs snapshot")
+
+	fss, _ := ListFs(testPath)
+	t.Log("filesystems: %s", fss)
+	snaps, _ := srcFs.ListSnapshots()
+	t.Log("snapshots: %s", snaps)
 
 	destFs = NewFs(badDataset)
 	fmt.Println("Sending to bad fs")
 	err = srcSnap.Send(destFs)
 	if err == nil {
+		destFs.Destroy(RF_No)
 		t.Error("[SndRcv] sended to bad fs")
 	}
-	if !InvalidDataset.MatchString(err.Error()) {
-		t.Error("[SndRcv] wrong error sending to bad dataset:", err)
+	if !BrokenPipe.MatchString(err.Error()) {
+		t.Fatal("[SndRcv] wrong error sending to bad dataset:", err)
 	}
 
 	err = srcSnap.Send(srcFs)
 	if err == nil {
 		t.Error("[SndRcv] sended to existent fs")
 	}
-	if !ReceiverExists.MatchString(err.Error()) {
+	if !BrokenPipe.MatchString(err.Error()) {
 		t.Error("[SndRcv] wrong error sending to existent fs:", err)
 	}
 	srcFs.Destroy(RF_Hard)
