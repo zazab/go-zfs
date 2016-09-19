@@ -29,7 +29,7 @@ func (s Snapshot) Clone(targetPath string) (Fs, error) {
 	if s.GetPool() != NewFs(targetPath).GetPool() {
 		return Fs{}, PoolError
 	}
-	c, err := s.runner.Command("zfs clone " + s.Path + " " + targetPath)
+	c, err := s.runner.Command("zfs clone -p " + s.Path + " " + targetPath)
 	if err != nil {
 		return Fs{}, errors.New("error creating clone: " + err.Error())
 	}
