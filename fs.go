@@ -162,7 +162,7 @@ func (z Zfs) CreateFs(zfsPath string) (Fs, error) {
 	if ok {
 		return z.NewFs(zfsPath), errors.New(fmt.Sprintf("fs %s already exists", zfsPath))
 	}
-	c, err := z.Command("zfs create " + zfsPath)
+	c, err := z.Command("zfs create -p " + zfsPath)
 	if err != nil {
 		return z.NewFs(zfsPath), err
 	}
