@@ -7,6 +7,7 @@ import (
 	"strconv"
 	"strings"
 
+	"github.com/reconquest/ser-go"
 	"github.com/theairkit/runcmd"
 )
 
@@ -120,7 +121,19 @@ func (z zfsEntryBase) Exists() (bool, error) {
 }
 
 func (z zfsEntryBase) Receive() (runcmd.CmdWorker, io.WriteCloser, error) {
-	c, err := z.runner.Command("zfs receive " + z.Path)
+	c, err := z.runner.Command("zfs create -p " + z.Path)
+	if err != nil {
+		return nil, nil, err
+	}
+
+	_, err = c.Run()
+	if err != nil {
+		return nil, nil, ser.Errorf(
+			err, "can't create zfs dataset",
+		)
+	}
+
+	c, err = z.runner.Command("zfs receive -F " + z.Path)
 	if err != nil {
 		return nil, nil, err
 	}
