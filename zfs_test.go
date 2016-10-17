@@ -2,22 +2,27 @@ package zfs
 
 import (
 	"fmt"
+	"os"
 	"path"
 	"testing"
 
 	"github.com/theairkit/runcmd"
 )
 
-const (
-	testPath   string = "tank/test"
-	sendPath   string = testPath
-	otherPool  string = "zssd/test"
-	sudoPath   string = "tank/sudo"
-	unicorn    string = testPath + "/unicorn"
-	badDataset string = testPath + "/bad/"
-	user       string = "persienko"
-	pass       string = "PASSWORD"
+var (
+	testPath   = "tank/test"
+	sendPath   = testPath
+	otherPool  = "zssd/test"
+	sudoPath   = "tank/sudo"
+	unicorn    = testPath + "/unicorn"
+	badDataset = testPath + "/bad/"
+	user       = os.Getenv("TEST_USER")
+	pass       = os.Getenv("TEST_PASSWORD")
 )
+
+func init() {
+	SetStdSudo(true)
+}
 
 func TestGetPool(t *testing.T) {
 	pool := NewFs("tank/some/thing").GetPool()
@@ -679,11 +684,13 @@ func TestSendReceive(t *testing.T) {
 
 	destFs = NewFs(badDataset)
 	fmt.Println("Sending to bad fs")
+
 	err = srcSnap.Send(destFs)
 	if err == nil {
 		destFs.Destroy(RF_No)
 		t.Error("[SndRcv] sended to bad fs")
 	}
+
 	if !BrokenPipe.MatchString(err.Error()) {
 		t.Fatal("[SndRcv] wrong error sending to bad dataset:", err)
 	}
@@ -704,7 +711,7 @@ func TestRemote(t *testing.T) {
 		t.Fatal("[Remote] error initializing connection:", err)
 	}
 
-	z := NewZfs(r, false)
+	z := NewZfs(r, true)
 	fs, err := z.CreateFs(testPath + "/fs")
 	if err != nil {
 		t.Error("[Remote]", err)

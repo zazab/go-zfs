@@ -7,7 +7,6 @@ import (
 	"strconv"
 	"strings"
 
-	"github.com/reconquest/ser-go"
 	"github.com/theairkit/runcmd"
 )
 
@@ -39,9 +38,9 @@ type zfsEntryBase struct {
 func (z zfsEntryBase) GetProperty(prop string) (string, error) {
 	c := z.runner.Command("zfs", "get", "-Hp", "-o", "value", prop, z.Path)
 
-	stdout, _, err := c.Output()
+	stdout, stderr, err := c.Output()
 	if err != nil {
-		return "", parseError(err)
+		return "", parseError(err, stderr)
 	}
 	return strings.Split(string(stdout), "\n")[0], nil
 }
@@ -49,9 +48,9 @@ func (z zfsEntryBase) GetProperty(prop string) (string, error) {
 func (z zfsEntryBase) GetPropertyInt(prop string) (int64, error) {
 	c := z.runner.Command("zfs", "get", "-Hp", "-o", "value", prop, z.Path)
 
-	stdout, _, err := c.Output()
+	stdout, stderr, err := c.Output()
 	if err != nil {
-		return 0, parseError(err)
+		return 0, parseError(err, stderr)
 	}
 	val, err := strconv.ParseInt(strings.Split(string(stdout), "\n")[0], 10, 64)
 	if err != nil {
@@ -67,8 +66,8 @@ func (z zfsEntryBase) getPath() string {
 func (z zfsEntryBase) SetProperty(prop, value string) error {
 	c := z.runner.Command("zfs", "set", prop+"="+value, z.Path)
 
-	if _, _, err := c.Output(); err != nil {
-		return parseError(err)
+	if _, stderr, err := c.Output(); err != nil {
+		return parseError(err, stderr)
 	}
 	out, err := z.GetProperty(prop)
 	if err != nil {
@@ -94,19 +93,20 @@ func (z zfsEntryBase) Destroy(recursive RecursiveFlag) error {
 
 	c := z.runner.Command("zfs", args...)
 
-	_, _, err := c.Output()
-	return parseError(err)
+	_, stderr, err := c.Output()
+	return parseError(err, stderr)
 }
 
 func (z zfsEntryBase) Exists() (bool, error) {
 	c := z.runner.Command("zfs", "list", "-H", "-o", "name", z.Path)
 
-	stdout, _, err := c.Output()
+	stdout, stderr, err := c.Output()
+
 	if err == nil && strings.Split(string(stdout), "\n")[0] == z.Path {
 		return true, nil
 	}
 
-	err = parseError(err)
+	err = parseError(err, stderr)
 	if err != nil && NotExist.MatchString(err.Error()) {
 		return false, nil
 	}
@@ -117,11 +117,9 @@ func (z zfsEntryBase) Exists() (bool, error) {
 func (z zfsEntryBase) Receive() (runcmd.CmdWorker, io.WriteCloser, error) {
 	c := z.runner.Command("zfs", "create", "-p", z.Path)
 
-	_, _, err := c.Output()
+	_, stderr, err := c.Output()
 	if err != nil {
-		return nil, nil, ser.Errorf(
-			err, "can't create zfs dataset",
-		)
+		return nil, nil, parseError(err, stderr)
 	}
 
 	c = z.runner.Command("zfs", "receive", "-F", z.Path)
@@ -166,8 +164,8 @@ func (z Zfs) CreateFs(zfsPath string) (Fs, error) {
 
 	c := z.Command("zfs", "create", "-p", zfsPath)
 
-	_, _, err = c.Output()
-	return z.NewFs(zfsPath), parseError(err)
+	_, stderr, err := c.Output()
+	return z.NewFs(zfsPath), parseError(err, stderr)
 }
 
 // See Zfs.NewFs
@@ -189,14 +187,14 @@ func ListFs(path string) ([]Fs, error) {
 func (z Zfs) ListFs(path string) ([]Fs, error) {
 	c := z.Command("zfs", "list", "-Hr", "-o", "name", path)
 
-	stdout, _, err := c.Output()
+	stdout, stderr, err := c.Output()
 	if err != nil {
-		err := parseError(err)
+		err := parseError(err, stderr)
 		if NotExist.MatchString(err.Error()) {
 			return []Fs{}, nil
 		}
 
-		return []Fs{}, parseError(err)
+		return []Fs{}, parseError(err, stderr)
 	}
 
 	filesystems := []Fs{}
@@ -213,20 +211,20 @@ func (z Zfs) ListFs(path string) ([]Fs, error) {
 func (f Fs) Promote() error {
 	c := f.runner.Command("zfs", "promote", f.Path)
 
-	_, _, err := c.Output()
-	return parseError(err)
+	_, stderr, err := c.Output()
+	return parseError(err, stderr)
 }
 
 func (f Fs) Mount() error {
-	c := f.runner.Command("zfs", "mount", ""+f.Path)
+	c := f.runner.Command("zfs", "mount", f.Path)
 
-	_, _, err := c.Output()
-	return parseError(err)
+	_, stderr, err := c.Output()
+	return parseError(err, stderr)
 }
 
 func (f Fs) Unmount() error {
-	c := f.runner.Command("zfs", "unmount", ""+f.Path)
+	c := f.runner.Command("zfs", "unmount", f.Path)
 
-	_, _, err := c.Output()
-	return parseError(err)
+	_, stderr, err := c.Output()
+	return parseError(err, stderr)
 }

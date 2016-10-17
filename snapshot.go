@@ -30,7 +30,7 @@ func (s Snapshot) Clone(targetPath string) (Fs, error) {
 		return Fs{}, PoolError
 	}
 
-	c := s.runner.Command("zfs", "clone", "-p", ""+s.Path, ""+targetPath)
+	c := s.runner.Command("zfs", "clone", "-p", s.Path, targetPath)
 
 	_, _, err := c.Output()
 	if err != nil {
@@ -44,9 +44,9 @@ func (f Fs) Snapshot(name string) (Snapshot, error) {
 	snapshotPath := f.Path + "@" + name
 	c := f.runner.Command("zfs", "snapshot", snapshotPath)
 
-	_, _, err := c.Output()
+	_, stderr, err := c.Output()
 	if err != nil {
-		return Snapshot{}, parseError(err)
+		return Snapshot{}, parseError(err, stderr)
 	}
 
 	snap := Snapshot{zfsEntryBase{f.runner, snapshotPath}, f, name}
@@ -58,9 +58,9 @@ func (f Fs) ListSnapshots() ([]Snapshot, error) {
 		"zfs", "list", "-Hr", "-o", "name", "-t", "snapshot", f.Path,
 	)
 
-	stdout, _, err := c.Output()
+	stdout, stderr, err := c.Output()
 	if err != nil {
-		return []Snapshot{}, parseError(err)
+		return []Snapshot{}, parseError(err, stderr)
 	}
 
 	snapshots := []Snapshot{}
@@ -97,7 +97,7 @@ func (s Snapshot) Send(to ZfsEntry) error {
 		return err
 	}
 
-	return parseError(rc.Wait())
+	return parseError(rc.Wait(), nil)
 }
 
 func (s Snapshot) SendWithParams(to ZfsEntry) error {
@@ -111,7 +111,7 @@ func (s Snapshot) SendWithParams(to ZfsEntry) error {
 		return err
 	}
 
-	return parseError(rc.Wait())
+	return parseError(rc.Wait(), nil)
 }
 
 func (s Snapshot) SendIncrementalWithParams(base Snapshot, to ZfsEntry) error {
@@ -125,7 +125,7 @@ func (s Snapshot) SendIncrementalWithParams(base Snapshot, to ZfsEntry) error {
 		return err
 	}
 
-	return parseError(rc.Wait())
+	return parseError(rc.Wait(), nil)
 }
 
 func (s Snapshot) SendIncremental(base Snapshot, to ZfsEntry) error {
@@ -139,7 +139,7 @@ func (s Snapshot) SendIncremental(base Snapshot, to ZfsEntry) error {
 		return err
 	}
 
-	return parseError(rc.Wait())
+	return parseError(rc.Wait(), nil)
 }
 
 func (s Snapshot) SendStream(dest io.Writer) error {
@@ -163,7 +163,7 @@ func (s Snapshot) SendStream(dest io.Writer) error {
 		return err
 	}
 
-	return parseError(c.Wait())
+	return parseError(c.Wait(), nil)
 }
 
 func (s Snapshot) SendStreamWithParams(dest io.Writer) error {
@@ -187,7 +187,7 @@ func (s Snapshot) SendStreamWithParams(dest io.Writer) error {
 		return err
 	}
 
-	return parseError(c.Wait())
+	return parseError(c.Wait(), nil)
 }
 
 func (s Snapshot) SendIncrementalStream(base Snapshot, dest io.Writer) error {
@@ -214,7 +214,7 @@ func (s Snapshot) SendIncrementalStream(base Snapshot, dest io.Writer) error {
 		return errors.New("error copying to dest: " + err.Error())
 	}
 
-	return parseError(c.Wait())
+	return parseError(c.Wait(), nil)
 }
 
 func (s Snapshot) SendIncrementalStreamWithParams(
@@ -244,7 +244,7 @@ func (s Snapshot) SendIncrementalStreamWithParams(
 		return errors.New("error copying to dest: " + err.Error())
 	}
 
-	return parseError(c.Wait())
+	return parseError(c.Wait(), nil)
 }
 
 func (s Snapshot) ListClones() ([]Fs, error) {
