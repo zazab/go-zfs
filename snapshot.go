@@ -29,13 +29,12 @@ func (s Snapshot) Clone(targetPath string) (Fs, error) {
 	if s.GetPool() != NewFs(targetPath).GetPool() {
 		return Fs{}, PoolError
 	}
-	c, err := s.runner.Command("zfs clone -p " + s.Path + " " + targetPath)
+
+	c := s.runner.Command("zfs", "clone", "-p", ""+s.Path, ""+targetPath)
+
+	_, _, err := c.Output()
 	if err != nil {
-		return Fs{}, errors.New("error creating clone: " + err.Error())
-	}
-	_, err = c.Run()
-	if err != nil {
-		return Fs{}, errors.New("error creating clone: " + err.Error())
+		return Fs{}, err
 	}
 
 	return Fs{zfsEntryBase{s.runner, targetPath}}, nil
@@ -43,12 +42,9 @@ func (s Snapshot) Clone(targetPath string) (Fs, error) {
 
 func (f Fs) Snapshot(name string) (Snapshot, error) {
 	snapshotPath := f.Path + "@" + name
-	c, err := f.runner.Command("zfs snapshot " + snapshotPath)
-	if err != nil {
-		return Snapshot{},
-			errors.New("error creating snapshot: " + err.Error())
-	}
-	_, err = c.Run()
+	c := f.runner.Command("zfs", "snapshot", snapshotPath)
+
+	_, _, err := c.Output()
 	if err != nil {
 		return Snapshot{}, parseError(err)
 	}
@@ -58,18 +54,17 @@ func (f Fs) Snapshot(name string) (Snapshot, error) {
 }
 
 func (f Fs) ListSnapshots() ([]Snapshot, error) {
-	c, err := f.runner.Command("zfs list -Hr -o name -t snapshot " + f.Path)
-	if err != nil {
-		return []Snapshot{},
-			errors.New("error getting snapshot list: " + err.Error())
-	}
-	out, err := c.Run()
+	c := f.runner.Command(
+		"zfs", "list", "-Hr", "-o", "name", "-t", "snapshot", f.Path,
+	)
+
+	stdout, _, err := c.Output()
 	if err != nil {
 		return []Snapshot{}, parseError(err)
 	}
 
 	snapshots := []Snapshot{}
-	for _, snap := range out {
+	for _, snap := range strings.Split(strings.TrimSpace(string(stdout)), "\n") {
 		if strings.Contains(snap, "@") {
 			snapName := strings.Split(snap, "@")[1]
 			snapshots = append(snapshots, Snapshot{
@@ -86,7 +81,9 @@ func (f Fs) ListSnapshots() ([]Snapshot, error) {
 }
 
 func notExits(e ZfsEntry) error {
-	return errors.New("cannot open '" + e.getPath() + "': dataset does not exist")
+	return errors.New(
+		"cannot open '" + e.getPath() + "': dataset does not exist",
+	)
 }
 
 func (s Snapshot) Send(to ZfsEntry) error {
@@ -150,10 +147,7 @@ func (s Snapshot) SendStream(dest io.Writer) error {
 		return notExits(s)
 	}
 
-	c, err := s.runner.Command("zfs send " + s.Path)
-	if err != nil {
-		return err
-	}
+	c := s.runner.Command("zfs", "send", s.Path)
 
 	stdoutPipe, err := c.StdoutPipe()
 	if err != nil {
@@ -177,10 +171,7 @@ func (s Snapshot) SendStreamWithParams(dest io.Writer) error {
 		return notExits(s)
 	}
 
-	c, err := s.runner.Command("zfs send -p " + s.Path)
-	if err != nil {
-		return err
-	}
+	c := s.runner.Command("zfs", "send", "-p", s.Path)
 
 	stdoutPipe, err := c.StdoutPipe()
 	if err != nil {
@@ -207,10 +198,7 @@ func (s Snapshot) SendIncrementalStream(base Snapshot, dest io.Writer) error {
 		return notExits(base)
 	}
 
-	c, err := s.runner.Command("zfs send -i " + base.Path + " " + s.Path)
-	if err != nil {
-		return errors.New("error initializing send: " + err.Error())
-	}
+	c := s.runner.Command("zfs", "send", "-i", base.Path, s.Path)
 
 	stdoutPipe, err := c.StdoutPipe()
 	if err != nil {
@@ -240,10 +228,7 @@ func (s Snapshot) SendIncrementalStreamWithParams(
 		return notExits(base)
 	}
 
-	c, err := s.runner.Command("zfs send -p -i " + base.Path + " " + s.Path)
-	if err != nil {
-		return errors.New("error initializing send: " + err.Error())
-	}
+	c := s.runner.Command("zfs", "send", "-p", "-i", base.Path, s.Path)
 
 	stdoutPipe, err := c.StdoutPipe()
 	if err != nil {
