@@ -13,11 +13,13 @@ type ZfsRunner struct {
 
 var std = mustCreateRunner(NewZfsLocal(false))
 
-func (z ZfsRunner) Command(cmd string) (runcmd.CmdWorker, error) {
+func (z ZfsRunner) Command(name string, args ...string) runcmd.CmdWorker {
 	if z.sudo {
-		cmd = "sudo " + cmd
+		args = append([]string{name}, args...)
+		name = "sudo"
 	}
-	return z.Runner.Command(cmd)
+
+	return z.Runner.Command(name, args...)
 }
 
 func NewZfsLocal(sudo bool) (Zfs, error) {

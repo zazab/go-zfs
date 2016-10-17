@@ -27,12 +27,17 @@ func joinErrs(errs []string) string {
 	return strings.Join(errs, "; ")
 }
 
-func parseError(err error) error {
+func parseError(err error, stderr []byte) error {
 	if err == nil {
 		return nil
 	}
 
-	errs := strings.Split(err.Error(), "\n")
+	var errs []string
+	if stderr != nil {
+		errs = strings.Split(string(stderr), "\n")
+	} else {
+		errs = strings.Split(string(err.Error()), "\n")
+	}
 
 	if strings.Contains(errs[0], "exit status") {
 		if len(errs) > 1 {
